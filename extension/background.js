@@ -1,3 +1,4 @@
+import { resultNotice } from "./display.js";
 import { buildAddBody, goodsCodeFromUrl, parseProduct } from "./payload.js";
 
 const ADD_URL = "https://cart.momoshop.com.tw/api/shoppingcart/modify/addGoods";
@@ -245,7 +246,7 @@ async function runAdd(item) {
       status: 0,
       goodsCode: item.goodsCode,
     };
-    await chrome.storage.local.set({ lastResult: record });
+    await remember(record);
     return record;
   }
   let data = null;
@@ -277,7 +278,7 @@ async function runAdd(item) {
         status: 0,
         goodsCode: item.goodsCode,
       };
-      await chrome.storage.local.set({ lastResult: record });
+      await remember(record);
       return record;
     }
     try {
@@ -303,12 +304,25 @@ async function runAdd(item) {
     status: raw.status,
     goodsCode: item.goodsCode,
   };
-  await chrome.storage.local.set({ lastResult: record });
+  await remember(record);
   return record;
 }
 
-function remember(record) {
-  return chrome.storage.local.set({ lastResult: record });
+function notifyResult(record) {
+  const notice = resultNotice(record);
+  const created = chrome.notifications.create({
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: notice.title,
+    message: notice.message,
+    requireInteraction: true,
+  });
+  if (created && typeof created.catch === "function") created.catch(() => {});
+}
+
+async function remember(record) {
+  await chrome.storage.local.set({ lastResult: record });
+  notifyResult(record);
 }
 
 async function runBurst(job) {
@@ -558,6 +572,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       })
       .then(sendResponse)
       .catch((error) => sendResponse({ message: error.message, deliveries: [] }));
+    return true;
+  }
+
+  if (message?.type === "schedule") {
+    Promise.all([chrome.alarms.get(ALARM), chrome.storage.local.get("job")])
+      .then(([alarm, stored]) => {
+        const when = stored.job?.when;
+        sendResponse(alarm && typeof when === "number" ? { armed: true, when } : { armed: false });
+      })
+      .catch(() => sendResponse({ armed: false }));
     return true;
   }
 

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Momo Catcher",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "description": "在指定時間把商品加入 momo 購物車，回應時間顯示在擴充套件面板。",
-  "permissions": ["alarms", "storage", "tabs", "scripting", "windows"],
+  "permissions": ["alarms", "notifications", "storage", "tabs", "scripting", "windows"],
   "host_permissions": [
     "https://www.momoshop.com.tw/*",
     "https://cart.momoshop.com.tw/*"
