@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <title>Momo Catcher</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>加入購物車</h1>
+      <p id="clock">momo 時間對時中…</p>
+      <p class="hint">開搶時間以 momo 時間為準。預定時間前 0.6 秒起每 0.1 秒送一次，最多 30 次。每發的送出與收到時間顯示在下面。</p>
+    </header>
+    <form id="form">
+      <label>商品頁<input id="productUrl" type="url" required /></label>
+      <label>品號<input id="goodsCode" required readonly /></label>
+      <label>配送<select id="delivery" required></select></label>
+      <div class="row">
+        <label>規格<input id="goodsdtCode" required /></label>
+        <label>數量<input id="quantity" type="number" min="1" max="20" required /></label>
+      </div>
+      <label>開搶時間<input id="when" type="datetime-local" step="1" /></label>
+      <div class="actions">
+        <button type="button" id="now">立即測試</button>
+        <button type="submit" id="arm">到時間加入</button>
+        <button type="button" id="cancel" class="ghost">取消排程</button>
+      </div>
+    </form>
+    <p id="status"></p>
+    <section id="log">
+      <p id="log-summary"></p>
+      <ol id="log-lines"></ol>
+    </section>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,250 @@
+:root {
+  color-scheme: light;
+  --ink: #1c1917;
+  --muted: #6f675f;
+  --line: #e6dfd6;
+  --paper: #f6f3ee;
+  --field: #fffcf8;
+  --accent: #d0126a;
+  --accent-press: #a80d55;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 18px 16px 14px;
+  background:
+    linear-gradient(var(--accent), var(--accent)) 0 0 / 100% 3px no-repeat,
+    var(--paper);
+  color: var(--ink);
+  font: 13px/1.45 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+
+h1 {
+  margin: 8px 0 0;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+h1::before {
+  content: "Momo Catcher";
+  display: block;
+  margin-bottom: 7px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+#clock {
+  margin: 10px 0 0;
+  color: var(--ink);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.45;
+}
+
+.hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+form {
+  display: grid;
+  gap: 11px;
+  margin-top: 16px;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+input,
+select {
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--field);
+  color: var(--ink);
+  font: 13px/1.35 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  letter-spacing: 0;
+}
+
+input::placeholder {
+  color: #b3aaa2;
+}
+
+input:hover,
+select:hover {
+  border-color: #cfc6bc;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+input[readonly] {
+  border-style: dashed;
+  background: transparent;
+  color: #4d463f;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 88px;
+  gap: 10px;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+button {
+  min-height: 34px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: var(--accent);
+  color: white;
+  font: 650 12px/1.2 "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--accent-press);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+#now {
+  border-color: var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+#now:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+#cancel {
+  grid-column: 1 / -1;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+#cancel:hover {
+  background: transparent;
+  color: var(--ink);
+}
+
+#status {
+  min-height: 0;
+  margin: 14px 0 0;
+  color: var(--ink);
+  font-size: 12.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+#status:empty {
+  display: none;
+}
+
+#log {
+  max-height: 168px;
+  margin-top: 12px;
+  padding-top: 10px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  scrollbar-color: #d9d0c6 transparent;
+}
+
+#log:not(:has(li)):not(:has(#log-summary:not(:empty))) {
+  display: none;
+}
+
+#log-summary {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+#log-summary:empty {
+  display: none;
+}
+
+#log-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+
+#log-lines li {
+  margin: 0;
+  padding: 7px 0 7px 8px;
+  border-top: 1px solid var(--line);
+}
+
+#log-lines li.is-ok {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+#log-lines li.is-stop {
+  color: var(--muted);
+}
+
+#log-lines li.is-fail {
+  box-shadow: inset 2px 0 0 #9a3412;
+}
+
+#log-lines li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button:active {
+    transform: none;
+  }
+}

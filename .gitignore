@@ -1,0 +1,5 @@
+logs/
+browser_profile/
+__pycache__/
+.venv/
+*.pyc
