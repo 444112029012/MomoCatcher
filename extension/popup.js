@@ -1,3 +1,4 @@
+import { scheduleLine } from "./display.js";
 import { goodsCodeFromUrl } from "./payload.js";
 
 const TEST_URL = "https://www.momoshop.com.tw/product/15562751";
@@ -74,6 +75,16 @@ function setWhenToNow() {
   document.querySelector("#when").value =
     `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}` +
     `T${pad(local.getHours())}:${pad(local.getMinutes())}:${pad(local.getSeconds())}`;
+}
+
+async function refreshSchedule() {
+  const schedule = document.querySelector("#schedule");
+  try {
+    const state = await chrome.runtime.sendMessage({ type: "schedule" });
+    schedule.textContent = scheduleLine(state);
+  } catch {
+    schedule.textContent = "";
+  }
 }
 
 function formatClock(ms) {
@@ -156,11 +167,13 @@ document.querySelector("#form").addEventListener("submit", async (event) => {
   const job = { ...readItem(), id: `job-${when}-${Date.now()}`, when };
   show("設定排程…");
   const result = await chrome.runtime.sendMessage({ type: "arm", job });
+  await refreshSchedule();
   show(result?.armed ? `已排程 ${whenValue}\n預定時間前 0.8 秒開始，最多 20 次。請讓 momo 分頁留在前景。紀錄會出現在下面。` : `排程失敗：${result?.message || ""}`);
 });
 
 document.querySelector("#cancel").addEventListener("click", async () => {
   await chrome.runtime.sendMessage({ type: "cancel" });
+  await refreshSchedule();
   show("已取消排程。");
 });
 
@@ -176,6 +189,10 @@ const saved = {
 fill(saved);
 setWhenToNow();
 await loadProduct(saved.productUrl || TEST_URL, saved.delivery);
+await refreshSchedule();
+chrome.alarms.onAlarm.addListener(() => {
+  refreshSchedule();
+});
 
 const savedLog = await chrome.storage.session.get("burstLog");
 renderLog(savedLog.burstLog);
