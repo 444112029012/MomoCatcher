@@ -1,4 +1,4 @@
-# Momo Catcher
+# <img src="extension/icons/icon128.png" width="32" height="32" alt="" align="absmiddle"> Momo Catcher
 
 Chrome 擴充套件。在你已經登入的 momo 購物網裡，於指定時間把商品加入購物車，然後打開結帳畫面。最後一步「確認結帳」要自己按。
 
@@ -52,6 +52,7 @@ Chrome 擴充套件。在你已經登入的 momo 購物網裡，於指定時間�
 
 ```
 extension/
+  icons/           工具列圖示
   manifest.json    套件設定與版本
   popup.html       面板
   popup.js         表單、時鐘、紀錄
