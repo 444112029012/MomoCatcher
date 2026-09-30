@@ -156,7 +156,7 @@ document.querySelector("#form").addEventListener("submit", async (event) => {
   const job = { ...readItem(), id: `job-${when}-${Date.now()}`, when };
   show("設定排程…");
   const result = await chrome.runtime.sendMessage({ type: "arm", job });
-  show(result?.armed ? `已排程 ${whenValue}\n預定時間前 0.6 秒開始，最多 30 次。請讓 momo 分頁留在前景。紀錄會出現在下面。` : `排程失敗：${result?.message || ""}`);
+  show(result?.armed ? `已排程 ${whenValue}\n預定時間前 0.8 秒開始，最多 20 次。請讓 momo 分頁留在前景。紀錄會出現在下面。` : `排程失敗：${result?.message || ""}`);
 });
 
 document.querySelector("#cancel").addEventListener("click", async () => {

@@ -5,10 +5,10 @@ const CART_PAGE = "https://cart.momoshop.com.tw/view/cart/WEB/newNormal";
 const LIMIT_HIT = "已超過此商品的限購數量";
 const TIME_URL = "https://www.momoshop.com.tw/";
 const ALARM = "momo-add";
-const LEAD_MS = 600;
+const LEAD_MS = 800;
 const PREP_MS = 5000;
 const INTERVAL_MS = 100;
-const ATTEMPTS = 30;
+const ATTEMPTS = 20;
 
 let firing = false;
 let burstTabId = null;
