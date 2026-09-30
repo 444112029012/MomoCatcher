@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resultNotice, scheduleLine } from "../extension/display.js";
+import { clockNote, resultNotice, scheduleLine } from "../extension/display.js";
+test("clock note says when the offset is a guess", () => {
+  assert.equal(clockNote(120, true), "momo 比這台電腦快 120ms");
+  assert.equal(clockNote(-80, false), "momo 比這台電腦慢 80ms，沒看到秒數跳動，時差是猜的，最多可能差 0.5 秒");
+  assert.equal(clockNote(10, false), "momo 與這台電腦幾乎相同，沒看到秒數跳動，時差是猜的，最多可能差 0.5 秒");
+});
 
 test("schedule line appears only while a job is armed", () => {
   const when = new Date(2026, 9, 1, 20, 0, 0).getTime();

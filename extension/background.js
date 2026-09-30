@@ -1,4 +1,4 @@
-import { resultNotice } from "./display.js";
+import { clockNote, resultNotice } from "./display.js";
 import { buildAddBody, goodsCodeFromUrl, parseProduct } from "./payload.js";
 
 const ADD_URL = "https://cart.momoshop.com.tw/api/shoppingcart/modify/addGoods";
@@ -7,11 +7,15 @@ const LIMIT_HIT = "已超過此商品的限購數量";
 const TIME_URL = "https://www.momoshop.com.tw/";
 const ALARM = "momo-add";
 const LEAD_MS = 800;
-const PREP_MS = 5000;
+const WAKE_BEFORE_SALE_MS = 10000;
+const FOCUS_BEFORE_SALE_MS = 3000;
 const INTERVAL_MS = 100;
 const ATTEMPTS = 20;
+const PANEL_TIME_SAMPLES = 6;
+const SALE_TIME_SAMPLES = 30;
 
 let firing = false;
+let burstCancelled = false;
 let burstTabId = null;
 let clock = { offset: 0, rtt: 0, syncedAt: 0, precise: false };
 let logState = { summary: "", lines: [] };
@@ -23,13 +27,7 @@ function formatClock(ms) {
 }
 
 function skewNote() {
-  const ms = Math.round(clock.offset);
-  const gap = Math.abs(ms) < 50
-    ? "momo 與這台電腦幾乎相同"
-    : ms > 0
-      ? `momo 比這台電腦快 ${ms}ms`
-      : `momo 比這台電腦慢 ${-ms}ms`;
-  return clock.precise ? gap : `${gap}，momo 時間只到秒`;
+  return clockNote(clock.offset, clock.precise);
 }
 
 function formatDelay(ms) {
@@ -65,12 +63,18 @@ async function readServerDate() {
   return { server, started, ended, rtt: ended - started };
 }
 
-async function syncClock(stopAt = Infinity) {
+async function syncClock(stopAt = Infinity, attempts = PANEL_TIME_SAMPLES) {
   let previous = null;
   let best = null;
-  for (let i = 0; i < 6; i += 1) {
-    if (Date.now() > stopAt) break;
-    const sample = await readServerDate();
+  for (let i = 0; i < attempts; i += 1) {
+    if (Date.now() >= stopAt) break;
+    let sample;
+    try {
+      sample = await readServerDate();
+    } catch {
+      previous = null;
+      continue;
+    }
     if (!best || sample.rtt < best.rtt) best = sample;
     if (previous && sample.server >= previous.server + 1000) {
       const boundary = (previous.ended + sample.started) / 2;
@@ -83,6 +87,21 @@ async function syncClock(stopAt = Infinity) {
   const midpoint = best.started + best.rtt / 2;
   clock = { offset: best.server + 500 - midpoint, rtt: best.rtt, syncedAt: Date.now(), precise: false };
   return clock;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitUntil(target) {
+  while (Date.now() < target) {
+    if (burstCancelled) return false;
+    await chrome.runtime.getPlatformInfo();
+    const delay = Math.min(1000, target - Date.now());
+    if (delay <= 0) break;
+    await sleep(delay);
+  }
+  return !burstCancelled;
 }
 
 function waitForLoad(tabId) {
@@ -113,12 +132,12 @@ function waitForLoad(tabId) {
   });
 }
 
-async function momoTab(productUrl) {
+async function momoTab(productUrl, active = true) {
   const tabs = await chrome.tabs.query({ url: "https://www.momoshop.com.tw/*" });
   const existing = tabs.find((tab) => tab.id != null);
   if (existing?.id != null) return existing.id;
 
-  const created = await chrome.tabs.create({ url: productUrl, active: true });
+  const created = await chrome.tabs.create({ url: productUrl, active });
   if (created.id == null) throw new Error("無法打開商品頁");
   await waitForLoad(created.id);
   return created.id;
@@ -328,17 +347,27 @@ async function remember(record) {
 async function runBurst(job) {
   const ready = await hydrate(job);
   const body = buildAddBody(ready);
-  const roughStart = job.when - clock.offset - LEAD_MS;
-  await syncClock(roughStart - 1500);
+  const roughSale = job.when - clock.offset;
+  const tabReady = momoTab(job.productUrl, false);
+  await Promise.all([
+    tabReady,
+    syncClock(roughSale - FOCUS_BEFORE_SALE_MS, SALE_TIME_SAMPLES),
+  ]);
+  const tabId = await tabReady;
+  burstTabId = tabId;
   const saleAt = job.when - clock.offset;
   const startLocal = saleAt - LEAD_MS;
-  const remain = startLocal - Date.now();
+  const focusAt = saleAt - FOCUS_BEFORE_SALE_MS;
   await beginLog(
     `預定 ${formatClock(job.when)}（momo 時間）　以下為本地時間　${skewNote()}　延遲負值代表比預定早`,
-    remain >= 0 ? `準備完成，距第一發還有 ${remain}ms` : `準備完成時已晚 ${-remain}ms，會立刻送出`,
+    "對時完成，開賣前 3 秒會把視窗拉到前面。",
   );
-  const tabId = await momoTab(job.productUrl);
-  burstTabId = tabId;
+  if (!await waitUntil(focusAt)) {
+    appendLog("已取消，未送出");
+    return { at: Date.now(), success: false, message: "已取消", cartUrl: "", status: 0, goodsCode: ready.goodsCode };
+  }
+  const remain = startLocal - Date.now();
+  appendLog(remain >= 0 ? `準備完成，距第一發還有 ${remain}ms` : `準備完成時已晚 ${-remain}ms，會立刻送出`);
   const tab = await chrome.tabs.get(tabId);
   await chrome.tabs.update(tabId, { active: true });
   if (tab.windowId != null) await chrome.windows.update(tab.windowId, { focused: true });
@@ -512,8 +541,8 @@ async function arm(job) {
   await syncClock();
   await chrome.storage.local.set({ job });
   await chrome.alarms.clear(ALARM);
-  const startLocal = job.when - clock.offset - LEAD_MS;
-  await chrome.alarms.create(ALARM, { when: Math.max(Date.now() + 200, startLocal - PREP_MS) });
+  const saleLocal = job.when - clock.offset;
+  await chrome.alarms.create(ALARM, { when: Math.max(Date.now() + 200, saleLocal - WAKE_BEFORE_SALE_MS) });
   await momoTab(job.productUrl);
 }
 
@@ -521,7 +550,9 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM) return;
   const { job } = await chrome.storage.local.get("job");
   if (!job || firing) return;
+  burstCancelled = false;
   firing = true;
+  await chrome.storage.session.set({ preparing: job.when });
   try {
     const key = `fired:${job.id}`;
     const existing = await chrome.storage.session.get(key);
@@ -543,6 +574,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   } finally {
     firing = false;
     burstTabId = null;
+    await chrome.storage.session.remove("preparing");
   }
 });
 
@@ -576,11 +608,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "schedule") {
-    Promise.all([chrome.alarms.get(ALARM), chrome.storage.local.get("job")])
-      .then(([alarm, stored]) => {
-        const when = stored.job?.when;
-        sendResponse(alarm && typeof when === "number" ? { armed: true, when } : { armed: false });
-      })
+    Promise.all([
+      chrome.alarms.get(ALARM),
+      chrome.storage.local.get("job"),
+      chrome.storage.session.get("preparing"),
+    ]).then(([alarm, stored, session]) => {
+      const when = stored.job?.when;
+      const preparing = session.preparing === when;
+      sendResponse((alarm || preparing) && typeof when === "number" ? { armed: true, when } : { armed: false });
+    })
       .catch(() => sendResponse({ armed: false }));
     return true;
   }
@@ -600,8 +636,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === "cancel") {
+    burstCancelled = true;
     chrome.alarms.clear(ALARM).then(async () => {
       await chrome.storage.local.remove("job");
+      await chrome.storage.session.remove("preparing");
       if (burstTabId != null) {
         await chrome.scripting.executeScript({
           target: { tabId: burstTabId },
