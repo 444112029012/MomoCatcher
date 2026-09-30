@@ -1,4 +1,4 @@
-import { scheduleLine } from "./display.js";
+import { CLOCK_GUESS_NOTE, scheduleLine } from "./display.js";
 import { goodsCodeFromUrl } from "./payload.js";
 
 const TEST_URL = "https://www.momoshop.com.tw/product/15562751";
@@ -103,7 +103,7 @@ function paintClock() {
     : skew > 0
       ? `比這台電腦快 ${skew.toFixed(2)} 秒`
       : `比這台電腦慢 ${Math.abs(skew).toFixed(2)} 秒`;
-  const precision = clockPrecise ? "" : "，伺服器時間只到秒";
+  const precision = clockPrecise ? "" : `，${CLOCK_GUESS_NOTE}`;
   clockNode.textContent = `momo ${formatClock(Date.now() + clockOffset)}　${relation}${precision}`;
 }
 
@@ -198,6 +198,7 @@ const savedLog = await chrome.storage.session.get("burstLog");
 renderLog(savedLog.burstLog);
 chrome.storage.session.onChanged.addListener((changes) => {
   if (changes.burstLog) renderLog(changes.burstLog.newValue);
+  if (changes.preparing) refreshSchedule();
 });
 
 refreshClock();
