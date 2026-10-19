@@ -613,9 +613,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       chrome.storage.local.get("job"),
       chrome.storage.session.get("preparing"),
     ]).then(([alarm, stored, session]) => {
-      const when = stored.job?.when;
+      const job = stored.job;
+      const when = job?.when;
       const preparing = session.preparing === when;
-      sendResponse((alarm || preparing) && typeof when === "number" ? { armed: true, when } : { armed: false });
+      const armed = (alarm || preparing) && typeof when === "number";
+      sendResponse(armed ? {
+        armed: true,
+        when,
+        goodsName: job.goodsName || "",
+        delivery: job.delivery || "",
+        quantity: job.quantity || "",
+      } : { armed: false });
     })
       .catch(() => sendResponse({ armed: false }));
     return true;

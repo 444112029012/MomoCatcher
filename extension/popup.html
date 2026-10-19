@@ -10,7 +10,7 @@
       <h1>加入購物車</h1>
       <p id="clock">momo 時間對時中…</p>
       <p id="schedule" role="status"></p>
-      <p class="hint">開搶時間以 momo 時間為準。開賣前 0.1 秒送出第一發，之後每 0.1 秒一次，最多 20 次。第二發在開賣瞬間。每發的送出與收到時間顯示在下面。</p>
+      <p class="hint">開搶時間以 momo 時間為準。</p>
     </header>
     <form id="form">
       <label>商品頁<input id="productUrl" type="url" required /></label>
@@ -27,11 +27,14 @@
         <button type="button" id="cancel" class="ghost">取消排程</button>
       </div>
     </form>
+    <p id="result" role="status"></p>
     <p id="status"></p>
-    <section id="log">
+    <button type="button" id="log-toggle" hidden>看紀錄</button>
+    <section id="log" class="is-collapsed">
       <p id="log-summary"></p>
       <ol id="log-lines"></ol>
     </section>
+    <footer id="links"></footer>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

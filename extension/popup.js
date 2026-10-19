@@ -1,4 +1,5 @@
-import { CLOCK_GUESS_NOTE, scheduleLine } from "./display.js";
+import { resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
+import { visibleLinks, supportLinks } from "./links.js";
 import { goodsCodeFromUrl } from "./payload.js";
 
 const TEST_URL = "https://www.momoshop.com.tw/product/15562751";
@@ -52,12 +53,21 @@ function show(text) {
   status.textContent = text;
 }
 
+function setResult(text) {
+  document.querySelector("#result").textContent = text || "";
+}
+
+let logOpen = false;
+
 function renderLog(state) {
   const summary = document.querySelector("#log-summary");
   const lines = document.querySelector("#log-lines");
+  const toggle = document.querySelector("#log-toggle");
+  const log = document.querySelector("#log");
+  const entries = state?.lines || [];
   summary.textContent = state?.summary || "";
   lines.replaceChildren(
-    ...(state?.lines || []).map((text) => {
+    ...entries.map((text) => {
       const item = document.createElement("li");
       item.textContent = text;
       if (/(?:^|\s)ok$/.test(text)) item.className = "is-ok";
@@ -66,7 +76,13 @@ function renderLog(state) {
       return item;
     }),
   );
-  if (lines.lastElementChild) lines.lastElementChild.scrollIntoView();
+  const hasLog = Boolean(state?.summary) || entries.length > 0;
+  toggle.hidden = !hasLog;
+  toggle.textContent = logOpen ? "收起紀錄" : "看紀錄";
+  log.classList.toggle("is-collapsed", !hasLog || !logOpen);
+  const sentence = resultSentence(entries);
+  if (sentence) setResult(sentence);
+  if (logOpen && lines.lastElementChild) lines.lastElementChild.scrollIntoView();
 }
 
 function setWhenToNow() {
@@ -152,6 +168,7 @@ document.querySelector("#now").addEventListener("click", async () => {
   const result = await chrome.runtime.sendMessage({ type: "add-now", item: readItem() });
   if (result?.skipped) return;
   show(result?.success ? `已加入，已打開結帳。\n${result.cartUrl}` : `失敗：${result?.message || "沒有回應"}`);
+  setResult(resultSentence([result?.success ? "已加入" : (result?.message || "")]));
 });
 
 document.querySelector("#form").addEventListener("submit", async (event) => {
@@ -198,8 +215,15 @@ chrome.alarms.onAlarm.addListener(() => {
 
 const savedLog = await chrome.storage.session.get("burstLog");
 renderLog(savedLog.burstLog);
+document.querySelector("#log-toggle").addEventListener("click", () => {
+  logOpen = !logOpen;
+  renderLog(savedLog.burstLog);
+});
 chrome.storage.session.onChanged.addListener((changes) => {
-  if (changes.burstLog) renderLog(changes.burstLog.newValue);
+  if (changes.burstLog) {
+    savedLog.burstLog = changes.burstLog.newValue;
+    renderLog(savedLog.burstLog);
+  }
   if (changes.preparing) refreshSchedule();
 });
 
@@ -211,4 +235,20 @@ for (const id of [...fields, "delivery"]) {
   document.querySelector(`#${id}`).addEventListener("change", async () => {
     await chrome.storage.local.set({ draft: readItem() });
   });
+}
+
+if (!resultSentence(savedLog.burstLog?.lines || []) && stored.lastResult) {
+  setResult(resultSentence([stored.lastResult.success ? "已加入" : stored.lastResult.message]));
+}
+
+const footer = document.querySelector("#links");
+for (const link of visibleLinks(supportLinks)) {
+  const anchor = document.createElement("a");
+  anchor.href = link.url;
+  anchor.textContent = link.label;
+  anchor.addEventListener("click", (event) => {
+    event.preventDefault();
+    chrome.tabs.create({ url: link.url, active: false });
+  });
+  footer.append(anchor);
 }
