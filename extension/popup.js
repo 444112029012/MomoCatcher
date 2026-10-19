@@ -1,4 +1,5 @@
-import { CLOCK_GUESS_NOTE, scheduleLine } from "./display.js";
+import { panelResult, resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
+import { visibleLinks, supportLinks } from "./links.js";
 import { goodsCodeFromUrl } from "./payload.js";
 
 const TEST_URL = "https://www.momoshop.com.tw/product/15562751";
@@ -52,12 +53,21 @@ function show(text) {
   status.textContent = text;
 }
 
+function setResult(text) {
+  document.querySelector("#result").textContent = text || "";
+}
+
+let logOpen = false;
+
 function renderLog(state) {
   const summary = document.querySelector("#log-summary");
   const lines = document.querySelector("#log-lines");
+  const toggle = document.querySelector("#log-toggle");
+  const log = document.querySelector("#log");
+  const entries = state?.lines || [];
   summary.textContent = state?.summary || "";
   lines.replaceChildren(
-    ...(state?.lines || []).map((text) => {
+    ...entries.map((text) => {
       const item = document.createElement("li");
       item.textContent = text;
       if (/(?:^|\s)ok$/.test(text)) item.className = "is-ok";
@@ -66,7 +76,12 @@ function renderLog(state) {
       return item;
     }),
   );
-  if (lines.lastElementChild) lines.lastElementChild.scrollIntoView();
+  const hasLog = Boolean(state?.summary) || entries.length > 0;
+  toggle.hidden = !hasLog;
+  toggle.textContent = logOpen ? "收起紀錄" : "看紀錄";
+  log.classList.toggle("is-collapsed", !hasLog || !logOpen);
+  setResult(panelResult(state));
+  if (logOpen && lines.lastElementChild) lines.lastElementChild.scrollIntoView();
 }
 
 function setWhenToNow() {
@@ -152,6 +167,7 @@ document.querySelector("#now").addEventListener("click", async () => {
   const result = await chrome.runtime.sendMessage({ type: "add-now", item: readItem() });
   if (result?.skipped) return;
   show(result?.success ? `已加入，已打開結帳。\n${result.cartUrl}` : `失敗：${result?.message || "沒有回應"}`);
+  setResult(resultSentence([result?.success ? "已加入" : (result?.message || "")]));
 });
 
 document.querySelector("#form").addEventListener("submit", async (event) => {
@@ -168,8 +184,14 @@ document.querySelector("#form").addEventListener("submit", async (event) => {
   show("設定排程…");
   const result = await chrome.runtime.sendMessage({ type: "arm", job });
   await refreshSchedule();
+  if (result?.armed) {
+    logOpen = false;
+    savedLog.burstLog = { summary: "", lines: [] };
+    await chrome.storage.session.set({ burstLog: savedLog.burstLog });
+    renderLog(savedLog.burstLog);
+  }
   show(result?.armed
-    ? `已排程 ${whenValue}\n會用已經開著的 momo 分頁（www.momoshop.com.tw）。開賣前 3 秒把這個分頁拉到前面，面板會關掉。\n開賣前 0.1 秒開始加入，第二發在開賣瞬間，最多 20 次。`
+    ? `已排程 ${whenValue}\n會用已經開著的 momo 分頁（www.momoshop.com.tw）。開賣前 3 秒把這個分頁拉到前面，面板會關掉。\n開賣瞬間開始加入，之後每 0.12 秒一次，最多 20 次。`
     : `排程失敗：${result?.message || ""}`);
 });
 
@@ -179,7 +201,7 @@ document.querySelector("#cancel").addEventListener("click", async () => {
   show("已取消排程。");
 });
 
-const stored = await chrome.storage.local.get(["draft", "job", "lastResult"]);
+const stored = await chrome.storage.local.get(["draft", "job"]);
 const saved = {
   productUrl: TEST_URL,
   goodsCode: "15562751",
@@ -198,8 +220,15 @@ chrome.alarms.onAlarm.addListener(() => {
 
 const savedLog = await chrome.storage.session.get("burstLog");
 renderLog(savedLog.burstLog);
+document.querySelector("#log-toggle").addEventListener("click", () => {
+  logOpen = !logOpen;
+  renderLog(savedLog.burstLog);
+});
 chrome.storage.session.onChanged.addListener((changes) => {
-  if (changes.burstLog) renderLog(changes.burstLog.newValue);
+  if (changes.burstLog) {
+    savedLog.burstLog = changes.burstLog.newValue;
+    renderLog(savedLog.burstLog);
+  }
   if (changes.preparing) refreshSchedule();
 });
 
@@ -211,4 +240,16 @@ for (const id of [...fields, "delivery"]) {
   document.querySelector(`#${id}`).addEventListener("change", async () => {
     await chrome.storage.local.set({ draft: readItem() });
   });
+}
+
+const footer = document.querySelector("#links");
+for (const link of visibleLinks(supportLinks)) {
+  const anchor = document.createElement("a");
+  anchor.href = link.url;
+  anchor.textContent = link.label;
+  anchor.addEventListener("click", (event) => {
+    event.preventDefault();
+    chrome.tabs.create({ url: link.url, active: false });
+  });
+  footer.append(anchor);
 }

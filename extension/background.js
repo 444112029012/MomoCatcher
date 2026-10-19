@@ -6,10 +6,10 @@ const CART_PAGE = "https://cart.momoshop.com.tw/view/cart/WEB/newNormal";
 const LIMIT_HIT = "已超過此商品的限購數量";
 const TIME_URL = "https://www.momoshop.com.tw/";
 const ALARM = "momo-add";
-const LEAD_MS = 100;
+const LEAD_MS = 0;
 const WAKE_BEFORE_SALE_MS = 10000;
 const FOCUS_BEFORE_SALE_MS = 3000;
-const INTERVAL_MS = 100;
+const INTERVAL_MS = 120;
 const ATTEMPTS = 20;
 const PANEL_TIME_SAMPLES = 6;
 const SALE_TIME_SAMPLES = 30;
@@ -613,9 +613,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       chrome.storage.local.get("job"),
       chrome.storage.session.get("preparing"),
     ]).then(([alarm, stored, session]) => {
-      const when = stored.job?.when;
+      const job = stored.job;
+      const when = job?.when;
       const preparing = session.preparing === when;
-      sendResponse((alarm || preparing) && typeof when === "number" ? { armed: true, when } : { armed: false });
+      const armed = (alarm || preparing) && typeof when === "number";
+      sendResponse(armed ? {
+        armed: true,
+        when,
+        goodsName: job.goodsName || "",
+        delivery: job.delivery || "",
+        quantity: job.quantity || "",
+      } : { armed: false });
     })
       .catch(() => sendResponse({ armed: false }));
     return true;
