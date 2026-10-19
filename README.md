@@ -69,7 +69,7 @@ extension/
   popup.css
   background.js    排程、對時、加入購物車、打開結帳
   display.js       排程是否還在、結果通知的文字
-  links.js         贊助與蝦皮分潤網址
+  links.js         贊助與 Funbox 分潤網址
   payload.js       從商品頁讀資料，組加入購物車的內容
 ```
 

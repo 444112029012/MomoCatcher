@@ -1,6 +1,6 @@
 export const supportLinks = [
   { label: "贊助", url: "" },
-  { label: "蝦皮分潤", url: "" },
+  { label: "Funbox蝦皮官網", url: "https://s.shopee.tw/9fLlBmTscp" },
 ];
 
 export function visibleLinks(links = supportLinks) {
