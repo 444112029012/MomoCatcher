@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clockNote, resultNotice, resultSentence, scheduleLine } from "../extension/display.js";
+import { clockNote, panelResult, resultNotice, resultSentence, scheduleLine } from "../extension/display.js";
 import { visibleLinks } from "../extension/links.js";
 test("clock note says when the offset is a guess", () => {
   assert.equal(clockNote(120, true), "momo 比這台電腦快 120ms");
@@ -31,6 +31,9 @@ test("result sentence keeps the outcome that matters", () => {
   assert.equal(resultSentence(["庫存不足"]), "庫存不足");
   assert.equal(resultSentence(["已超過此商品的限購數量"]), "已達限購");
   assert.equal(resultSentence([]), "");
+  assert.equal(panelResult(null), "");
+  assert.equal(panelResult({ summary: "", lines: [] }), "");
+  assert.equal(panelResult({ summary: "預定 20:00:00", lines: ["#01 此商品尚未開賣 (SCS101)"] }), "尚未開賣");
 });
 
 test("support links stay hidden until a real https url is set", () => {

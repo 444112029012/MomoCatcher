@@ -1,4 +1,4 @@
-import { resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
+import { panelResult, resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
 import { visibleLinks, supportLinks } from "./links.js";
 import { goodsCodeFromUrl } from "./payload.js";
 
@@ -80,8 +80,7 @@ function renderLog(state) {
   toggle.hidden = !hasLog;
   toggle.textContent = logOpen ? "收起紀錄" : "看紀錄";
   log.classList.toggle("is-collapsed", !hasLog || !logOpen);
-  const sentence = resultSentence(entries);
-  if (sentence) setResult(sentence);
+  setResult(panelResult(state));
   if (logOpen && lines.lastElementChild) lines.lastElementChild.scrollIntoView();
 }
 
@@ -185,6 +184,12 @@ document.querySelector("#form").addEventListener("submit", async (event) => {
   show("設定排程…");
   const result = await chrome.runtime.sendMessage({ type: "arm", job });
   await refreshSchedule();
+  if (result?.armed) {
+    logOpen = false;
+    savedLog.burstLog = { summary: "", lines: [] };
+    await chrome.storage.session.set({ burstLog: savedLog.burstLog });
+    renderLog(savedLog.burstLog);
+  }
   show(result?.armed
     ? `已排程 ${whenValue}\n會用已經開著的 momo 分頁（www.momoshop.com.tw）。開賣前 3 秒把這個分頁拉到前面，面板會關掉。\n開賣前 0.1 秒開始加入，第二發在開賣瞬間，最多 20 次。`
     : `排程失敗：${result?.message || ""}`);
@@ -196,7 +201,7 @@ document.querySelector("#cancel").addEventListener("click", async () => {
   show("已取消排程。");
 });
 
-const stored = await chrome.storage.local.get(["draft", "job", "lastResult"]);
+const stored = await chrome.storage.local.get(["draft", "job"]);
 const saved = {
   productUrl: TEST_URL,
   goodsCode: "15562751",
@@ -235,10 +240,6 @@ for (const id of [...fields, "delivery"]) {
   document.querySelector(`#${id}`).addEventListener("change", async () => {
     await chrome.storage.local.set({ draft: readItem() });
   });
-}
-
-if (!resultSentence(savedLog.burstLog?.lines || []) && stored.lastResult) {
-  setResult(resultSentence([stored.lastResult.success ? "已加入" : stored.lastResult.message]));
 }
 
 const footer = document.querySelector("#links");

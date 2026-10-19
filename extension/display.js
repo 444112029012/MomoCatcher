@@ -25,6 +25,13 @@ export function scheduleLine(state) {
   return parts.join("　");
 }
 
+export function panelResult(state) {
+  const entries = state?.lines || [];
+  const hasLog = Boolean(state?.summary) || entries.length > 0;
+  if (!hasLog) return "";
+  return resultSentence(entries);
+}
+
 export function resultSentence(lines) {
   const texts = (lines || []).map((line) => String(line || ""));
   if (texts.some((text) => /(?:^|\s)ok$/.test(text) || text.includes("已加入"))) return "已加入";
