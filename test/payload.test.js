@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { buildAddBody, goodsCodeFromUrl, parseProduct } from "../extension/payload.js";
+import { clueLines, formatSaleTimestamp } from "../extension/display.js";
 
 const fixturePath = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "product-15562751.html");
 const savedPage = readFileSync(fixturePath, "utf8");
@@ -14,6 +15,14 @@ test("reads the saved momo product page", () => {
     goodsPrice: "315",
     goodsdtCode: "001",
     limitBuyQty: "30",
+    goodsStock: "1",
+    onSaleTimestamp: "0",
+    canTipStock: "",
+    purchaseText: "",
+    limitBuy4MemberOnly: "0",
+    goodsPaymentDescription: "預計今天 10/01 到貨",
+    goodsNum: "20",
+    purchaseNumber: "30",
     deliveries: [
       { code: "first", label: "快速到貨" },
       { code: "superstore", label: "超商取貨" },
@@ -84,6 +93,33 @@ test("collapses a repeated delivery code", () => {
     { code: "first", label: "快速到貨" },
     { code: "shopcart", label: "廠商宅配" },
   ]);
+});
+
+test("clues show stock and the sale timestamp without treating stock as permission to buy", () => {
+  const info = parseProduct([
+    'goodsName\\":\\"測試商品\\"',
+    'goodsStock\\":\\"0\\"',
+    'onSaleTimestamp\\":0',
+    'purchaseNumber\\":\\"1\\"',
+    'purchaseText\\":\\"每人限購1組\\"',
+    'canTipStock\\":\\"1\\"',
+    'limitBuy4MemberOnly\\":\\"1\\"',
+    'goodsPaymentDescription\\":\\"預計今天到貨\\"',
+    'goodsTypeCode\\":\\"001\\",\\"canTipStock\\":\\"1\\",\\"goodsNum\\":\\"0\\"',
+  ].join(","));
+  assert.equal(info.goodsStock, "0");
+  assert.equal(info.goodsNum, "0");
+  assert.equal(info.canTipStock, "1");
+  assert.ok(clueLines(info).includes("canTipStock　1"));
+  assert.equal(clueLines(info)[0], "上次抓取　還沒抓取");
+  assert.deepEqual(clueLines(info).slice(1, 4), [
+    "庫存 goodsStock　0",
+    "開賣時間 onSaleTimestamp　0（沒有開賣時間）",
+    "規格庫存 goodsNum　0",
+  ]);
+  const fetched = new Date(2026, 9, 20, 9, 40, 1, 234).getTime();
+  assert.equal(clueLines({ ...info, fetchedAt: fetched })[0], "上次抓取　2026-10-20 09:40:01.234");
+  assert.equal(formatSaleTimestamp(new Date(2026, 9, 20, 0, 0, 0).getTime()), "2026-10-20 00:00:00");
 });
 
 test("reads a goods code from a product url", () => {

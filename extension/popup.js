@@ -1,6 +1,7 @@
-import { panelResult, resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
+import { clueLines, panelResult, resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
 import { visibleLinks, supportLinks } from "./links.js";
 import { goodsCodeFromUrl } from "./payload.js";
+import { strategies, strategyById } from "./strategies.js";
 
 const TEST_URL = "https://www.momoshop.com.tw/product/15562751";
 const fields = ["productUrl", "goodsCode", "goodsdtCode", "quantity"];
@@ -21,6 +22,7 @@ function readItem() {
     goodsPrice: product.goodsPrice,
     limitBuyQty: product.limitBuyQty,
     delivery: document.querySelector("#delivery").value,
+    strategy: document.querySelector("#strategy").value,
   };
   for (const id of fields) item[id] = document.querySelector(`#${id}`).value.trim();
   item.quantity = Number(item.quantity);
@@ -42,6 +44,21 @@ function setDeliveries(deliveries, selected) {
   if (next) select.value = next;
 }
 
+function renderStrategy(id) {
+  const select = document.querySelector("#strategy");
+  const selected = strategyById(id);
+  select.replaceChildren(
+    ...strategies.map((item) => {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      return option;
+    }),
+  );
+  select.value = selected.id;
+  document.querySelector("#strategy-note").textContent = selected.note;
+}
+
 function fill(item) {
   for (const id of fields) {
     const input = document.querySelector(`#${id}`);
@@ -58,6 +75,33 @@ function setResult(text) {
 }
 
 let logOpen = false;
+let clueOpen = false;
+let pageClues = null;
+
+function renderClues(info, message = "") {
+  const toggle = document.querySelector("#clue-toggle");
+  const section = document.querySelector("#clues");
+  const list = document.querySelector("#clue-list");
+  const lines = info ? clueLines(info) : [message || "還沒讀到商品線索。"];
+  toggle.hidden = false;
+  toggle.textContent = clueOpen ? "收起商品線索" : "商品線索";
+  list.replaceChildren(...lines.map((text) => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    return item;
+  }));
+  section.classList.toggle("is-collapsed", !clueOpen);
+}
+
+async function refreshClues(goodsCode) {
+  const live = await chrome.runtime.sendMessage({ type: "clues", goodsCode });
+  if (!live || live.failed) {
+    renderClues(pageClues, live?.message);
+    return;
+  }
+  pageClues = { ...pageClues, ...live, fetchedAt: Date.now() };
+  renderClues(pageClues);
+}
 
 function renderLog(state) {
   const summary = document.querySelector("#log-summary");
@@ -154,6 +198,9 @@ async function loadProduct(url, selectedDelivery) {
   setDeliveries(info.deliveries, selectedDelivery);
   show(`${info.goodsName}\n配送：${info.deliveries.map((item) => item.label).join("、")}`);
   await chrome.storage.local.set({ draft: readItem() });
+  pageClues = { ...info, fetchedAt: Date.now() };
+  renderClues(pageClues);
+  refreshClues(code);
 }
 
 document.querySelector("#productUrl").addEventListener("change", (event) => {
@@ -190,8 +237,9 @@ document.querySelector("#form").addEventListener("submit", async (event) => {
     await chrome.storage.session.set({ burstLog: savedLog.burstLog });
     renderLog(savedLog.burstLog);
   }
+  const strategy = strategyById(job.strategy);
   show(result?.armed
-    ? `已排程 ${whenValue}\n會用已經開著的 momo 分頁（www.momoshop.com.tw）。開賣前 3 秒把這個分頁拉到前面，面板會關掉。\n開賣瞬間開始加入，之後每 0.12 秒一次，最多 20 次。`
+    ? `已排程 ${whenValue}\n會用已經開著的 momo 分頁（www.momoshop.com.tw）。開賣前 3 秒把這個分頁拉到前面，面板會關掉。\n${strategy.label}：${strategy.note}`
     : `排程失敗：${result?.message || ""}`);
 });
 
@@ -211,6 +259,7 @@ const saved = {
   ...stored.job,
 };
 fill(saved);
+renderStrategy(saved.strategy);
 setWhenToNow();
 await loadProduct(saved.productUrl || TEST_URL, saved.delivery);
 await refreshSchedule();
@@ -224,6 +273,10 @@ document.querySelector("#log-toggle").addEventListener("click", () => {
   logOpen = !logOpen;
   renderLog(savedLog.burstLog);
 });
+document.querySelector("#clue-toggle").addEventListener("click", () => {
+  clueOpen = !clueOpen;
+  renderClues(pageClues);
+});
 chrome.storage.session.onChanged.addListener((changes) => {
   if (changes.burstLog) {
     savedLog.burstLog = changes.burstLog.newValue;
@@ -235,6 +288,11 @@ chrome.storage.session.onChanged.addListener((changes) => {
 refreshClock();
 setInterval(paintClock, 100);
 setInterval(refreshClock, 15000);
+
+document.querySelector("#strategy").addEventListener("change", async (event) => {
+  renderStrategy(event.target.value);
+  await chrome.storage.local.set({ draft: readItem() });
+});
 
 for (const id of [...fields, "delivery"]) {
   document.querySelector(`#${id}`).addEventListener("change", async () => {

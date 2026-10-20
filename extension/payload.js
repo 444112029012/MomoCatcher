@@ -40,11 +40,26 @@ export function parseProduct(html) {
   const specs = pick(/goodsTypeCode\\":\\"([^\\"]+)/g);
   const names = pick(/goodsName\\":\\"([^\\"]+)/g);
   const limits = pick(/purchaseNumber\\":\\"(\d+)/g);
+  const stocks = pick(/goodsStock\\":\\"([^\\"]*)/g);
+  const saleTimes = pick(/onSaleTimestamp\\":(\d+)/g);
+  const tipStocks = pick(/canTipStock\\":\\"([^\\"]*)/g);
+  const purchaseTexts = pick(/purchaseText\\":\\"([^\\"]*)/g);
+  const memberLimits = pick(/limitBuy4MemberOnly\\":\\"([^\\"]*)/g);
+  const payments = pick(/goodsPaymentDescription\\":\\"([^\\"]*)/g);
+  const goodsNums = pick(/goodsNum\\":\\"(\d+)/g);
   return {
     goodsName: names[0] || "",
     goodsPrice: prices[0] || "",
     goodsdtCode: specs[0] || "001",
     limitBuyQty: limits[0] || "",
+    goodsStock: stocks[0] || "",
+    onSaleTimestamp: saleTimes[0] || "0",
+    canTipStock: tipStocks[0] || "",
+    purchaseText: purchaseTexts[0] || "",
+    limitBuy4MemberOnly: memberLimits[0] || "",
+    goodsPaymentDescription: payments[0] || "",
+    goodsNum: goodsNums[0] || "",
+    purchaseNumber: limits[0] || "",
     deliveries,
   };
 }

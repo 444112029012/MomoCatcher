@@ -21,6 +21,8 @@
         <label>數量<input id="quantity" type="number" min="1" max="20" required /></label>
       </div>
       <label>開搶時間<input id="when" type="datetime-local" step="1" /></label>
+      <label>搶購策略<select id="strategy"></select></label>
+      <p id="strategy-note" class="hint"></p>
       <div class="actions">
         <button type="button" id="now">立即測試</button>
         <button type="submit" id="arm">到時間加入</button>
@@ -29,6 +31,10 @@
     </form>
     <p id="result" role="status"></p>
     <p id="status"></p>
+    <button type="button" id="clue-toggle" hidden>商品線索</button>
+    <section id="clues" class="is-collapsed">
+      <ul id="clue-list"></ul>
+    </section>
     <button type="button" id="log-toggle" hidden>看紀錄</button>
     <section id="log" class="is-collapsed">
       <p id="log-summary"></p>

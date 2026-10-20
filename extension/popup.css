@@ -75,6 +75,10 @@ h1::before {
   line-height: 1.55;
 }
 
+#strategy-note {
+  margin: -6px 0 0;
+}
+
 form {
   display: grid;
   gap: 11px;
@@ -210,7 +214,8 @@ button:focus-visible {
   display: none;
 }
 
-#log-toggle {
+#log-toggle,
+#clue-toggle {
   display: block;
   width: 100%;
   margin-top: 8px;
@@ -222,13 +227,45 @@ button:focus-visible {
   text-align: left;
 }
 
-#log-toggle:hover {
+#log-toggle:hover,
+#clue-toggle:hover {
   background: transparent;
   color: var(--ink);
 }
 
-#log-toggle[hidden] {
+#log-toggle[hidden],
+#clue-toggle[hidden] {
   display: none;
+}
+
+#clues {
+  max-height: 132px;
+  margin-top: 4px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+#clues.is-collapsed {
+  display: none;
+}
+
+#clue-list {
+  margin: 0;
+  padding: 8px 0;
+  list-style: none;
+}
+
+#clue-list li {
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+#clue-list li:first-child {
+  border-top: 0;
 }
 
 #log.is-collapsed {
