@@ -1,4 +1,5 @@
 import { deliveryLabel } from "./payload.js";
+import { strategyById } from "./strategies.js";
 
 export const CLOCK_GUESS_NOTE = "沒看到秒數跳動，時差是猜的，最多可能差 0.5 秒";
 
@@ -22,6 +23,7 @@ export function scheduleLine(state) {
   const delivery = deliveryLabel(state.delivery || "", "");
   if (delivery) parts.push(delivery);
   if (state.quantity) parts.push(`${state.quantity} 件`);
+  if (state.strategy) parts.push(strategyById(state.strategy).label);
   return parts.join("　");
 }
 
@@ -45,6 +47,40 @@ export function resultSentence(lines) {
     if (text.includes("限購")) return "已達限購";
   }
   return "";
+}
+
+export function formatSaleTimestamp(value) {
+  const number = Number(value);
+  if (value === "" || value == null || Number.isNaN(number) || number === 0) return "0（沒有開賣時間）";
+  const ms = number < 1e12 ? number * 1000 : number;
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return String(value);
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+export function formatFetchedAt(value) {
+  const number = Number(value);
+  if (!number || Number.isNaN(number)) return "還沒抓取";
+  const date = new Date(number);
+  if (Number.isNaN(date.getTime())) return "還沒抓取";
+  const pad = (part, size = 2) => String(part).padStart(size, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
+}
+
+export function clueLines(info) {
+  const blank = (value) => (value === "" || value == null ? "空" : String(value));
+  return [
+    `上次抓取　${formatFetchedAt(info?.fetchedAt)}`,
+    `庫存 goodsStock　${blank(info?.goodsStock)}`,
+    `開賣時間 onSaleTimestamp　${formatSaleTimestamp(info?.onSaleTimestamp)}`,
+    `規格庫存 goodsNum　${blank(info?.goodsNum)}`,
+    `canTipStock　${blank(info?.canTipStock)}`,
+    `限購數量 purchaseNumber　${blank(info?.purchaseNumber)}`,
+    `限購說明 purchaseText　${blank(info?.purchaseText)}`,
+    `會員限購 limitBuy4MemberOnly　${blank(info?.limitBuy4MemberOnly)}`,
+    `到貨說明　${blank(info?.goodsPaymentDescription)}`,
+  ];
 }
 
 export function resultNotice(record) {

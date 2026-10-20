@@ -1,5 +1,6 @@
 import { clockNote, resultNotice } from "./display.js";
 import { buildAddBody, goodsCodeFromUrl, parseProduct } from "./payload.js";
+import { strategyById } from "./strategies.js";
 
 const ADD_URL = "https://cart.momoshop.com.tw/api/shoppingcart/modify/addGoods";
 const CART_PAGE = "https://cart.momoshop.com.tw/view/cart/WEB/newNormal";
@@ -9,8 +10,6 @@ const ALARM = "momo-add";
 const LEAD_MS = 0;
 const WAKE_BEFORE_SALE_MS = 10000;
 const FOCUS_BEFORE_SALE_MS = 3000;
-const INTERVAL_MS = 120;
-const ATTEMPTS = 20;
 const PANEL_TIME_SAMPLES = 6;
 const SALE_TIME_SAMPLES = 30;
 
@@ -52,6 +51,47 @@ function beginLog(summary, firstLine) {
 
 function momoNow() {
   return Date.now() + clock.offset;
+}
+
+const REALTIME_URL = "https://www.momoshop.com.tw/api/moecapp/getGoodsRealTimeInfo";
+
+async function readClues(goodsCode) {
+  const response = await fetch(REALTIME_URL, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json",
+      version: "999999",
+      rc: "",
+    },
+    body: JSON.stringify({
+      goodsCode,
+      fsCode: "",
+      hour: "",
+      addressData: {},
+      categoryCode: "",
+      host: "momoshop",
+    }),
+  });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = null;
+  }
+  const goods = data?.rtnGoodsData;
+  if (!goods) throw new Error("讀不到商品即時狀態");
+  return {
+    goodsStock: goods.goodsStock ?? "",
+    onSaleTimestamp: goods.onSaleTimestamp ?? "",
+    canTipStock: goods.canTipStock ?? "",
+    purchaseNumber: goods.purchaseNumber ?? "",
+    purchaseText: goods.purchaseText ?? "",
+    limitBuy4MemberOnly: goods.limitBuy4MemberOnly ?? "",
+    goodsPaymentDescription: goods.goodsPaymentDescription ?? "",
+  };
 }
 
 async function readServerDate() {
@@ -376,8 +416,8 @@ async function runBurst(job) {
   try {
     [injected] = await chrome.scripting.executeScript({
     target: { tabId },
-    args: [ADD_URL, body, startLocal, saleAt, INTERVAL_MS, ATTEMPTS],
-    func: async (url, payload, startAt, sale, interval, attempts) => {
+    args: [ADD_URL, body, startLocal, saleAt, strategyById(job.strategy).offsets],
+    func: async (url, payload, startAt, sale, offsets) => {
       globalThis.__momoCatcherStop = false;
       const controllers = [];
       globalThis.__momoCatcherAbort = () => {
@@ -410,9 +450,9 @@ async function runBurst(job) {
         }).catch(() => {});
       }
 
-      for (let index = 0; index < attempts; index += 1) {
+      for (let index = 0; index < offsets.length; index += 1) {
         if (globalThis.__momoCatcherStop || won) break;
-        await sleepUntil(startAt + index * interval);
+        await sleepUntil(startAt + offsets[index]);
         if (globalThis.__momoCatcherStop || won) break;
         const controller = new AbortController();
         controllers.push(controller);
@@ -596,6 +636,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === "clues") {
+    readClues(message.goodsCode)
+      .then(sendResponse)
+      .catch((error) => sendResponse({ failed: true, message: error.message }));
+    return true;
+  }
+
   if (message?.type === "inspect") {
     fetch(message.url, { credentials: "omit" })
       .then(async (response) => {
@@ -623,6 +670,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         goodsName: job.goodsName || "",
         delivery: job.delivery || "",
         quantity: job.quantity || "",
+        strategy: job.strategy || "",
       } : { armed: false });
     })
       .catch(() => sendResponse({ armed: false }));

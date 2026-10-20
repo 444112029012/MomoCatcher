@@ -17,6 +17,7 @@ test("schedule line appears only while a job is armed", () => {
     delivery: "first",
     quantity: 1,
   }), "已排程 2026-10-01 20:00:00　測試商品　快速到貨　1 件");
+  assert.equal(scheduleLine({ armed: true, when, strategy: "strategy-1" }), "已排程 2026-10-01 20:00:00　策略一");
   assert.equal(scheduleLine({ armed: true, when }), "已排程 2026-10-01 20:00:00");
   assert.equal(scheduleLine({ armed: false, when }), "");
   assert.equal(scheduleLine({ armed: true }), "");
