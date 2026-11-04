@@ -406,8 +406,13 @@ async function runBurst(job) {
     appendLog("已取消，未送出");
     return { at: Date.now(), success: false, message: "已取消", cartUrl: "", status: 0, goodsCode: ready.goodsCode };
   }
+  const strategy = strategyById(job.strategy);
   const remain = startLocal - Date.now();
-  appendLog(remain >= 0 ? `準備完成，距第一發還有 ${remain}ms` : `準備完成時已晚 ${-remain}ms，會立刻送出`);
+  appendLog(strategy.watchStock
+    ? "準備完成。開賣後看 goodsStock，有庫存才送出。"
+    : strategy.holdTipStocks
+    ? "準備完成。開賣後看 canTipStock，不是 3 也不是 0 才送出。"
+    : remain >= 0 ? `準備完成，距第一發還有 ${remain}ms` : `準備完成時已晚 ${-remain}ms，會立刻送出`);
   const tab = await chrome.tabs.get(tabId);
   await chrome.tabs.update(tabId, { active: true });
   if (tab.windowId != null) await chrome.windows.update(tab.windowId, { focused: true });
@@ -416,8 +421,9 @@ async function runBurst(job) {
   try {
     [injected] = await chrome.scripting.executeScript({
     target: { tabId },
-    args: [ADD_URL, body, startLocal, saleAt, strategyById(job.strategy).offsets],
-    func: async (url, payload, startAt, sale, offsets) => {
+    args: [ADD_URL, REALTIME_URL, body, startLocal, saleAt, strategy],
+    func: async (url, realtimeUrl, payload, startAt, sale, plan) => {
+      const offsets = plan.offsets || [];
       globalThis.__momoCatcherStop = false;
       const controllers = [];
       globalThis.__momoCatcherAbort = () => {
@@ -433,7 +439,6 @@ async function runBurst(job) {
       let won = null;
       let lastMessage = "沒有回應";
       let sent = 0;
-      const pending = [];
 
       function report(n, sentAt, message) {
         const doneAt = Date.now();
@@ -450,26 +455,86 @@ async function runBurst(job) {
         }).catch(() => {});
       }
 
-      for (let index = 0; index < offsets.length; index += 1) {
-        if (globalThis.__momoCatcherStop || won) break;
-        await sleepUntil(startAt + offsets[index]);
-        if (globalThis.__momoCatcherStop || won) break;
+      function note(text) {
+        chrome.runtime.sendMessage({ type: "note", text }).catch(() => {});
+      }
+
+      if (Array.isArray(plan.holdTipStocks)) {
+        const holds = new Set(plan.holdTipStocks.map(String));
+        const goodsCode = payload?.data?.goods?.[0]?.goodsCode || "";
+        const watchUntil = startAt + (plan.watchMs || 0);
+        let tip = "";
+        let opened = false;
+        while (Date.now() < watchUntil && !globalThis.__momoCatcherStop) {
+          if (Date.now() < startAt) await sleepUntil(startAt);
+          if (Date.now() >= watchUntil || globalThis.__momoCatcherStop) break;
+          try {
+            const response = await fetch(realtimeUrl, {
+              method: "POST",
+              credentials: "include",
+              headers: {
+                Accept: "application/json, text/plain, */*",
+                "Content-Type": "application/json",
+                version: "999999",
+                rc: "",
+              },
+              referrer: location.href,
+              body: JSON.stringify({
+                goodsCode,
+                fsCode: "",
+                hour: "",
+                addressData: {},
+                categoryCode: "",
+                host: "momoshop",
+              }),
+            });
+            const text = await response.text();
+            let data = null;
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = null;
+            }
+            if (!data?.rtnGoodsData) {
+              await sleepUntil(Date.now() + 100);
+              continue;
+            }
+            tip = String(data.rtnGoodsData.canTipStock ?? "");
+            if (!holds.has(tip)) {
+              opened = true;
+              break;
+            }
+            await sleepUntil(Date.now() + 100);
+          } catch {
+            // 這次沒讀到就再看下一次。
+          }
+        }
+        if (!opened) {
+          note(`canTipStock ${tip === "" ? "空" : tip}，沒有送出`);
+          return { success: false, message: "canTipStock 仍是 3 或 0，沒有送出", sent: 0 };
+        }
+        note(`canTipStock ${tip === "" ? "空" : tip}，開始送出`);
+        startAt = Date.now();
+      }
+
+      async function dispatch() {
         const controller = new AbortController();
         controllers.push(controller);
         sent += 1;
         const n = sent;
         const sentAt = Date.now();
-        pending.push(fetch(url, {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            Accept: "application/json, text/plain, */*",
-            "Content-Type": "application/json;charset=UTF-8",
-          },
-          referrer: location.href,
-          body: JSON.stringify(payload),
-          signal: controller.signal,
-        }).then(async (response) => {
+        try {
+          const response = await fetch(url, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              Accept: "application/json, text/plain, */*",
+              "Content-Type": "application/json;charset=UTF-8",
+            },
+            referrer: location.href,
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+          });
           const text = await response.text();
           let data = null;
           try {
@@ -505,17 +570,110 @@ async function runBurst(job) {
             lastMessage = message;
           }
           report(n, sentAt, message);
-        }).catch((error) => {
+          return message;
+        } catch (error) {
           const message = error?.name === "AbortError" ? "已中止" : (error?.message || "失敗");
           if (error?.name !== "AbortError") lastMessage = message;
           if (error?.name !== "AbortError" && String(error?.message || "").includes("Failed to fetch")) {
             globalThis.__momoCatcherStop = true;
           }
           report(n, sentAt, message);
-        }));
+          return message;
+        }
       }
 
-      await Promise.all(pending);
+      if (plan.watchStock) {
+        const goodsCode = payload?.data?.goods?.[0]?.goodsCode || "";
+        const watchUntil = startAt + (plan.stockWatchMs || 300000);
+        const pollMs = plan.stockPollMs || 500;
+        const minSendGapMs = plan.minSendGapMs || 500;
+        let lastSendAt = 0;
+        while (Date.now() < watchUntil && !globalThis.__momoCatcherStop && !won) {
+          if (Date.now() < startAt) await sleepUntil(startAt);
+          if (Date.now() >= watchUntil || globalThis.__momoCatcherStop || won) break;
+          let stock = "";
+          try {
+            const response = await fetch(realtimeUrl, {
+              method: "POST",
+              credentials: "include",
+              headers: {
+                Accept: "application/json, text/plain, */*",
+                "Content-Type": "application/json",
+                version: "999999",
+                rc: "",
+              },
+              referrer: location.href,
+              body: JSON.stringify({
+                goodsCode,
+                fsCode: "",
+                hour: "",
+                addressData: {},
+                categoryCode: "",
+                host: "momoshop",
+              }),
+            });
+            const text = await response.text();
+            let data = null;
+            try {
+              data = JSON.parse(text);
+            } catch {
+              data = null;
+            }
+            stock = String(data?.rtnGoodsData?.goodsStock ?? "");
+          } catch {
+            await sleepUntil(Date.now() + pollMs);
+            continue;
+          }
+          if (stock === "" || stock === "0") {
+            await sleepUntil(Date.now() + pollMs);
+            continue;
+          }
+          const gap = lastSendAt + minSendGapMs - Date.now();
+          if (gap > 0) await sleepUntil(Date.now() + gap);
+          if (Date.now() >= watchUntil || globalThis.__momoCatcherStop || won) break;
+          note(`goodsStock ${stock}，送出`);
+          await dispatch();
+          lastSendAt = Date.now();
+        }
+        if (!sent) note("沒有看到庫存，沒有送出");
+        return { success: Boolean(won), cartUrl: won?.cartUrl || "", message: won ? "ok" : lastMessage, sent };
+      }
+
+      if (plan.sequential) {
+        const attempts = plan.attempts || 4;
+        const crowdWaitMs = plan.crowdWaitMs || 0;
+        const minSendGapMs = plan.minSendGapMs || 500;
+        const probeUntil = startAt + (plan.watchMs || 0);
+        let used = 0;
+        let lastSendAt = 0;
+        while (used < attempts && !globalThis.__momoCatcherStop && !won) {
+          const gap = lastSendAt ? lastSendAt + minSendGapMs - Date.now() : 0;
+          if (gap > 0) await sleepUntil(Date.now() + gap);
+          if (globalThis.__momoCatcherStop || won) break;
+          lastSendAt = Date.now();
+          const message = await dispatch();
+          if (globalThis.__momoCatcherStop || won) break;
+          if (/尚未開賣|SCS101/.test(message || "")) {
+            if (probeUntil && Date.now() >= probeUntil) break;
+            continue;
+          }
+          used += 1;
+          const retryLater = used < attempts && /人數眾多|SCS112|稍後再試/.test(message || "");
+          if (retryLater) {
+            note(`人數眾多，${crowdWaitMs / 1000} 秒後再送`);
+            await sleepUntil(Date.now() + crowdWaitMs);
+          }
+        }
+      } else {
+        const pending = [];
+        for (let index = 0; index < offsets.length; index += 1) {
+          if (globalThis.__momoCatcherStop || won) break;
+          await sleepUntil(startAt + offsets[index]);
+          if (globalThis.__momoCatcherStop || won) break;
+          pending.push(dispatch());
+        }
+        await Promise.all(pending);
+      }
       return { success: Boolean(won), cartUrl: won?.cartUrl || "", message: won ? "ok" : lastMessage, sent };
     },
   });
@@ -619,6 +777,11 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (message?.type === "note" && message.text) {
+    appendLog(String(message.text).replace(/\s+/g, " ").slice(0, 120));
+    return false;
+  }
+
   if (message?.type === "log" && message.line) {
     const line = message.line;
     const text = String(line.message || "").replace(/\s+/g, " ").slice(0, 80);
