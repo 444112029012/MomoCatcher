@@ -1,4 +1,4 @@
-import { clueLines, panelResult, resultSentence, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
+import { clueLines, panelResult, resultSentence, saleInputValue, scheduleLine, CLOCK_GUESS_NOTE } from "./display.js";
 import { visibleLinks, supportLinks } from "./links.js";
 import { goodsCodeFromUrl } from "./payload.js";
 import { strategies, strategyById } from "./strategies.js";
@@ -101,6 +101,7 @@ async function refreshClues(goodsCode) {
   }
   pageClues = { ...pageClues, ...live, fetchedAt: Date.now() };
   renderClues(pageClues);
+  applySaleTime(live.onSaleTimestamp);
 }
 
 function renderLog(state) {
@@ -126,6 +127,12 @@ function renderLog(state) {
   log.classList.toggle("is-collapsed", !hasLog || !logOpen);
   setResult(panelResult(state));
   if (logOpen && lines.lastElementChild) lines.lastElementChild.scrollIntoView();
+}
+
+function applySaleTime(value) {
+  const next = saleInputValue(value);
+  if (next) document.querySelector("#when").value = next;
+  else setWhenToNow();
 }
 
 function setWhenToNow() {
@@ -200,6 +207,7 @@ async function loadProduct(url, selectedDelivery) {
   await chrome.storage.local.set({ draft: readItem() });
   pageClues = { ...info, fetchedAt: Date.now() };
   renderClues(pageClues);
+  applySaleTime(info.onSaleTimestamp);
   refreshClues(code);
 }
 

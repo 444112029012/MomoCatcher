@@ -59,6 +59,12 @@ export function formatSaleTimestamp(value) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+export function saleInputValue(value) {
+  const formatted = formatSaleTimestamp(value);
+  if (!formatted || formatted.startsWith("0")) return "";
+  return formatted.replace(" ", "T");
+}
+
 export function formatFetchedAt(value) {
   const number = Number(value);
   if (!number || Number.isNaN(number)) return "還沒抓取";
